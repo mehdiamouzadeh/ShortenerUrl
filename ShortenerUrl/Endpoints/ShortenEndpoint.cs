@@ -16,6 +16,12 @@ public static class ShortenEndpoint
             var shortenUrl = await service.ShortenUrAsyncl(Url, cancellationToken);
             return Results.Ok(shortenUrl);
 
+        }).ShortCircuit();
+        endpoint.MapGet("/Metrics", async (ShortenService service) =>
+        {
+            //validation : xss attack
+            return Results.Ok(service.GetMetrics);
+
         });
     }
 

@@ -2,17 +2,32 @@
 using MongoDB.Driver;
 using ShortenerUrl.Infrastructure;
 using ShortenerUrl.Models;
+using ShortenerUrl.Observability;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace ShortenerUrl.Services;
 
-public class ShortenService(ShortenUrlDbContext dbContext,IConfiguration configuration)
+public class MetricsDo
+{
+    public int ShortenCode = 0;
+    public int Redirect = 0;
+
+}
+
+public class ShortenService(
+    ShortenUrlDbContext dbContext,
+    MetricsDo metricsDo,
+    ShortenDiagnostic shortenDiagnostic,
+    IConfiguration configuration)
 {
     private readonly ShortenUrlDbContext _dbContext = dbContext;
     private readonly IConfiguration _configuration = configuration;
+    private readonly ShortenDiagnostic _shortenDiagnostic = shortenDiagnostic;
+    public (int ShortCount, int RedirectCount) GetMetrics => new(metricsDo.ShortenCode, metricsDo.Redirect);
     public async Task<string> ShortenUrAsyncl(string longUrl, CancellationToken cancellationToken)
     {
+        _shortenDiagnostic.AddShorten();
         var url = await _dbContext.UrlTags.FirstOrDefaultAsync(x => x.DestinationUrl == longUrl, cancellationToken);
         if (url is not null)
             return GetServiceUrl(url.ShortenCode);
@@ -62,7 +77,11 @@ public class ShortenService(ShortenUrlDbContext dbContext,IConfiguration configu
     {
         var url = await _dbContext.UrlTags.FirstOrDefaultAsync(x => x.ShortenCode == shortencode, cancellationToken);
         if (url is not null)
+        {
+            _shortenDiagnostic.AddRedirection(shortencode);
             return url.DestinationUrl;
+        }
+        _shortenDiagnostic.AddFailedRefirection();
         throw new Exception("Invalid shorten code.");
 
     }
